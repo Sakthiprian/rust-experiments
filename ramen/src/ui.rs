@@ -1,28 +1,31 @@
 use ratatui::{
-    widgets::*,
-    text::Line,
-    layout::{Layout, Direction, Constraint, Rect, Alignment},
-    Frame
+    layout::{Alignment, Constraint, Direction, Layout, Rect}, style::{Style, Stylize}, text::Line, widgets::*, Frame
 };
+use sysinfo::{DiskUsage, Pid};
 
-pub fn build_layouts(no_cores: i32, frame: &mut Frame, mem_vec: &Vec<u64>) {
+pub fn build_layouts(
+    no_cores: i32,
+    frame: &mut Frame,
+    mem_vec: &Vec<u64>,
+    proc_vec: &Vec<(Pid, String, f32, DiskUsage)>,
+    scroll_offset: usize, 
+) {
     let outer_layout = Layout::default()
-    .direction(Direction::Vertical)
-    .constraints(vec![
-        Constraint::Percentage(25), // CPU Section
-        Constraint::Length(6),      // Memory Section (Fixed height of 4 lines)
-        Constraint::Min(0),         // Process List (Takes up remaining space)
-    ])
-    .split(frame.area());
-
+        .direction(Direction::Vertical)
+        .constraints(vec![
+            Constraint::Percentage(25), // CPU Section
+            Constraint::Length(6),      // Memory Section
+            Constraint::Min(0),         // Process List
+        ])
+        .split(frame.area());
 
     frame.render_widget(Block::default().title("CPU").borders(Borders::ALL), outer_layout[0]);
-    frame.render_widget(Block::default().title("Processes").borders(Borders::ALL), outer_layout[2]);
 
     render_cpu_section(no_cores, frame, &outer_layout);
     render_memory_section(frame, &outer_layout, mem_vec);
-    render_processes(frame, &outer_layout);
+    render_processes(frame, &outer_layout, proc_vec, scroll_offset); 
 }
+
     
 fn render_cpu_section(no_cores: i32, frame: &mut Frame<'_>, outer_layout: &[Rect]) {
     let cpu_section = outer_layout[0];
@@ -82,6 +85,49 @@ fn render_memory_section(frame: &mut Frame, outer_layout: &[Rect], mem_vec: &Vec
     frame.render_widget(paragraph, area);
 }
 
-fn render_processes(_frame: &mut Frame, _outer_layout: &[Rect]) {
-    // TODO: Implement process rendering
+fn render_processes(
+    frame: &mut Frame, 
+    outer_layout: &[Rect], 
+    proc_vec: &Vec<(Pid, String, f32, DiskUsage)>, 
+    scroll_offset: usize
+) {
+    let area = outer_layout[2]; // Process list area
+
+    let max_visible_rows = 19; // Adjust based on available height
+    let total_processes = proc_vec.len();
+
+    // Clamp scroll_offset to prevent out-of-bounds errors
+    let scroll_offset = scroll_offset.min(total_processes.saturating_sub(max_visible_rows));
+
+    // Header row
+    let mut rows = vec![
+        Row::new(vec!["PID", "Process Name", "CPU Usage", "Disk Usage"])
+            .style(Style::new())
+            .bold()
+    ];
+
+    // Render only the visible range of processes
+    for (pid, name, cpu_usage, disk_usage) in proc_vec.iter().skip(scroll_offset).take(max_visible_rows) {
+        rows.push(Row::new(vec![
+            pid.to_string(),
+            name.clone(),
+            format!("{:.2}%", cpu_usage),
+            format!("R: {} W: {}", disk_usage.read_bytes, disk_usage.written_bytes),
+        ]));
+    }
+
+    let widths = [
+        Constraint::Percentage(10), 
+        Constraint::Percentage(40), 
+        Constraint::Percentage(25), 
+        Constraint::Percentage(25),
+    ];
+
+    let table = Table::new(rows, widths)
+        .column_spacing(1)
+        .block(Block::default().title("Processes").borders(Borders::ALL));
+
+    frame.render_widget(table, area);
 }
+
+
