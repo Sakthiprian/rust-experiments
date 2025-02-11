@@ -2,7 +2,7 @@ mod ui;
 mod memory;
 
 use std::io;
-use crossterm::{execute, terminal::{EnterAlternateScreen, LeaveAlternateScreen}, event::{self, Event, KeyCode, KeyEventKind}};
+use crossterm:: event::{self, Event, KeyCode, KeyEventKind};
 use sysinfo::System;
 use ratatui::{backend::CrosstermBackend, Terminal};
 
